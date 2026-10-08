@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>·</title>
+<style>
+  :root { --void:#07040f; --water:#7fd6ff; --glow:#b48cff; --text:#e6dcff; --muted:#8f84a8; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body { background: radial-gradient(ellipse at 50% 35%, #1d1035 0%, var(--void) 70%) fixed; color: var(--text);
+         font-family: "Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+         display: flex; flex-direction: column; align-items: center; gap: 14px; min-height: 100vh; padding: 18px 16px 32px; }
+  nav { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  nav button { background: transparent; color: var(--muted); border: 1px solid #3a2a5c; border-radius: 999px; padding: 6px 14px; font-size: 13px; cursor: pointer; }
+  nav button.on { color: var(--text); border-color: var(--glow); background: rgba(108,63,196,.25); box-shadow: 0 0 10px rgba(180,140,255,.3); }
+  canvas { width: min(640px, 100%); aspect-ratio: 1; display: block; border-radius: 6px; touch-action: none;
+           clip-path: polygon(2% 1%,40% 0,62% 2%,98% 0,100% 35%,98% 70%,100% 99%,60% 100%,30% 98%,0 100%,1% 60%,0 25%); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; }
+  button.act { background: #1c1430; color: var(--text); border: 1px solid #4a3a72; border-radius: 8px; padding: 9px 14px; font-size: 14px; cursor: pointer; min-width: 44px; }
+  button.act:hover { border-color: var(--glow); box-shadow: 0 0 8px rgba(180,140,255,.35); }
+  button.act.on { background: #3b2a66; border-color: var(--glow); }
+  button.save { background: linear-gradient(180deg,#5b3aa8,#3b2378); border-color: #8f6be0; color: #f1eaff; }
+  .pad { display: grid; grid-template-columns: repeat(3, 46px); gap: 4px; }
+  .pad button { padding: 8px 0; }
+</style>
+</head>
+<body>
+<nav id="nav" style="display:none"></nav>
+<canvas id="cv" width="640" height="640"></canvas>
+<div class="row" id="ctrl"></div>
+<div class="row"><button class="act save" onclick="save()">이미지로 저장</button></div>
+
+<script>
+/* ─────────────────────────── 공통 ─────────────────────────── */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const SZ = 640, DPR = Math.min(2, window.devicePixelRatio || 1);
+cv.width = SZ * DPR; cv.height = SZ * DPR;
+const WATER = '#7fd6ff', GLOW = '#b48cff', ROOT = '#8a6a9e';
+const bgCanvas = document.createElement('canvas'); bgCanvas.width = SZ; bgCanvas.height = SZ;
+(function () {
+  const g = bgCanvas.getContext('2d'); let s = 13; const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  const bg = g.createRadialGradient(SZ / 2, SZ * .4, 30, SZ / 2, SZ * .4, SZ * .8);
+  bg.addColorStop(0, '#1d1035'); bg.addColorStop(1, '#07040f'); g.fillStyle = bg; g.fillRect(0, 0, SZ, SZ);
+  // 위에서 아래로 매달린 거꾸로 된 나무 실루엣
+  for (let i = 0; i < 9; i++) {
+    const x = rnd() * SZ, h = 40 + rnd() * 70; g.strokeStyle = 'rgba(70,50,100,.45)'; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x + (rnd() - .5) * 10, h); g.stroke();
+    g.fillStyle = 'rgba(55,38,85,.45)'; g.beginPath(); g.ellipse(x, h + 14, 16 + rnd() * 10, 20 + rnd() * 10, 0, 0, 7); g.fill();
+  }
+  for (let i = 0; i < 12; i++) {
+    g.save(); g.translate(rnd() * SZ, 120 + rnd() * (SZ - 120)); g.rotate(rnd() * 6.28); const w = 8 + rnd() * 30;
+    g.fillStyle = 'rgba(43,29,72,.5)'; g.beginPath(); g.moveTo(0, 0); g.lineTo(w, w * .2); g.lineTo(w * .8, w); g.lineTo(0, w * .7); g.closePath(); g.fill(); g.restore();
+  }
+})();
+function drawBG() { ctx.drawImage(bgCanvas, 0, 0); }
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+function pt(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * SZ, y: (e.clientY - r.top) / r.height * SZ }; }
+function btn(label, fn) { const b = document.createElement('button'); b.className = 'act'; b.textContent = label; b.onclick = fn; return b; }
+function orb(x, y, r, inner, outer, glow) {
+  const g = ctx.createRadialGradient(x - r * .3, y - r * .3, 1, x, y, r); g.addColorStop(0, inner); g.addColorStop(1, outer);
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fillStyle = g; ctx.shadowColor = glow; ctx.shadowBlur = 18; ctx.fill(); ctx.shadowBlur = 0;
+}
+function shade(x, y, r, t) {   // 그림자(숲의 주인 / 쫓아오는 것)
+  ctx.save(); ctx.translate(x, y);
+  ctx.beginPath(); for (let k = 0; k <= 20; k++) { const a = Math.PI * 2 * k / 20, w = r * (1 + .12 * Math.sin(t / 180 + k * 1.7)); ctx.lineTo(w * Math.cos(a), w * Math.sin(a) * 1.1); }
+  ctx.closePath(); const g = ctx.createRadialGradient(0, 0, 2, 0, 0, r * 1.2); g.addColorStop(0, '#1a0f2a'); g.addColorStop(1, '#3a1c4a');
+  ctx.fillStyle = g; ctx.shadowColor = '#d0457a'; ctx.shadowBlur = 14; ctx.fill(); ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ff7aa8'; ctx.beginPath(); ctx.arc(-r * .3, -r * .15, r * .1, 0, 7); ctx.arc(r * .3, -r * .15, r * .1, 0, 7); ctx.fill();
+  ctx.restore();
+}
+function rootBar(x1, y1, x2, y2, w, alpha = 1) {
+  ctx.save(); ctx.globalAlpha = alpha; ctx.lineCap = 'round';
+  ctx.strokeStyle = '#3a2648'; ctx.lineWidth = w + 4; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.strokeStyle = ROOT; ctx.lineWidth = w; ctx.shadowColor = '#c28bd8'; ctx.shadowBlur = 8; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.restore();
+}
+function veil(win) { ctx.fillStyle = win ? 'rgba(127,214,255,.08)' : 'rgba(40,0,20,.45)'; ctx.fillRect(0, 0, SZ, SZ); }
+
+/* ─────────────────── ② 쫓아오는 그림자 ─────────────────── */
+const Chase = (() => {
+  const N = 7, CELL = 68, OX = (SZ - N * CELL) / 2, OY = (SZ - N * CELL) / 2;
+  const Hw = [[0,0,0,0,0,0,1],[0,0,1,1,1,0,0],[0,0,0,1,0,0,0],[1,1,1,0,1,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,1,0],[1,1,1,1,1,1,1]];
+  const Vw = [[0,0,0,1,0,1,1],[0,0,0,0,0,0,1],[0,0,0,0,0,1,1],[0,0,1,0,1,1,1],[1,0,0,1,0,1,1],[0,0,0,1,1,0,1],[0,1,0,0,0,1,1]];
+  const P0 = [1, 1], M0 = [6, 5], X = [6, 0];
+  let p, m, hist, over, anim;
+  function reset() { p = P0.slice(); m = M0.slice(); hist = []; over = null; anim = null; }
+  function can(r, c, dr, dc) {
+    if (dr === 1) return r < N - 1 && !Hw[r][c]; if (dr === -1) return r > 0 && !Hw[r - 1][c];
+    if (dc === 1) return c < N - 1 && !Vw[r][c]; if (dc === -1) return c > 0 && !Vw[r][c - 1]; return true;
+  }
+  function shadowSteps(mm, pp) {
+    let [r, c] = mm; const steps = [[r, c]];
+    for (let s = 0; s < 2; s++) {
+      if (c !== pp[1]) { const dc = pp[1] > c ? 1 : -1; if (can(r, c, 0, dc)) c += dc; else if (r !== pp[0]) { const dr = pp[0] > r ? 1 : -1; if (can(r, c, dr, 0)) r += dr; } }
+      else if (r !== pp[0]) { const dr = pp[0] > r ? 1 : -1; if (can(r, c, dr, 0)) r += dr; }
+      steps.push([r, c]); if (r === pp[0] && c === pp[1]) break;
+    }
+    return steps;
+  }
+  function go(dr, dc) {
+    if (over) return; anim = null; if (!can(p[0], p[1], dr, dc)) return;
+    hist.push([p.slice(), m.slice()]);
+    const np = [p[0] + dr, p[1] + dc]; const pf = p.slice(); p = np;
+    if (np[0] === X[0] && np[1] === X[1]) { over = 'win'; anim = { t0: performance.now(), pf, steps: [m.slice()] }; return; }
+    const steps = shadowSteps(m, np); m = steps[steps.length - 1];
+    anim = { t0: performance.now(), pf, steps };
+    if (m[0] === p[0] && m[1] === p[1]) over = 'lose';
+  }
+  function undo() { if (!hist.length) return; anim = null; [p, m] = hist.pop(); over = null; }
+  const cx = c => OX + c * CELL + CELL / 2, cy = r => OY + r * CELL + CELL / 2;
+  function draw(t) {
+    drawBG(); const now = performance.now();
+    rr(OX - 10, OY - 10, N * CELL + 20, N * CELL + 20, 12); ctx.fillStyle = 'rgba(18,11,34,.9)'; ctx.fill(); ctx.strokeStyle = '#4a3a72'; ctx.lineWidth = 2; ctx.stroke();
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) { ctx.fillStyle = (r + c) % 2 ? 'rgba(36,24,60,.8)' : 'rgba(30,20,52,.8)'; ctx.fillRect(OX + c * CELL + 1, OY + r * CELL + 1, CELL - 2, CELL - 2); }
+    const pr = .32 + .04 * Math.sin(t / 300);
+    ctx.beginPath(); ctx.arc(cx(X[1]), cy(X[0]), CELL * pr, 0, 7); ctx.strokeStyle = WATER; ctx.lineWidth = 3; ctx.shadowColor = WATER; ctx.shadowBlur = 16; ctx.stroke(); ctx.shadowBlur = 0;
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      if (Hw[r][c] && r < N - 1) rootBar(OX + c * CELL + 4, OY + (r + 1) * CELL, OX + (c + 1) * CELL - 4, OY + (r + 1) * CELL, 7);
+      if (Vw[r][c] && c < N - 1) rootBar(OX + (c + 1) * CELL, OY + r * CELL + 4, OX + (c + 1) * CELL, OY + (r + 1) * CELL - 4, 7);
+    }
+    let pp = p, mm = m;
+    if (anim) {
+      const k1 = Math.min(1, (now - anim.t0) / 150); pp = [anim.pf[0] + (p[0] - anim.pf[0]) * k1, anim.pf[1] + (p[1] - anim.pf[1]) * k1];
+      const st = anim.steps, k2 = Math.max(0, (now - anim.t0 - 170) / 150), idx = Math.min(st.length - 1, Math.floor(k2)), f = Math.min(1, k2 - idx);
+      const a = st[idx], b = st[Math.min(st.length - 1, idx + 1)]; mm = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+      if (k2 >= st.length) anim = null;
+    }
+    if (!(over === 'win' && !anim)) orb(cx(pp[1]), cy(pp[0]), 18, '#ffffff', '#8e6ae0', GLOW);
+    shade(cx(mm[1]), cy(mm[0]), 22, t);
+    if (over && !anim) veil(over === 'win');
+  }
+  function controls() {
+    const pad = document.createElement('div'); pad.className = 'pad';
+    ['', ['↑', -1, 0], '', ['←', 0, -1], ['·', 0, 0], ['→', 0, 1], '', ['↓', 1, 0], ''].forEach(c => {
+      if (!c) { pad.appendChild(document.createElement('span')); return; }
+      pad.appendChild(btn(c[0], () => c[1] || c[2] ? go(c[1], c[2]) : wait()));
+    });
+    return [pad, btn('되돌리기', undo), btn('↺', reset)];
+  }
+  function wait() {
+    if (over) return; anim = null; hist.push([p.slice(), m.slice()]);
+    const steps = shadowSteps(m, p); m = steps[steps.length - 1]; anim = { t0: performance.now(), pf: p.slice(), steps };
+    if (m[0] === p[0] && m[1] === p[1]) over = 'lose';
+  }
+  const key = kk => { const d = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[kk]; if (d) go(d[0], d[1]); if (kk === ' ') wait(); if (kk === 'z' || kk === 'Backspace') undo(); };
+  reset();
+  return { name: '그림자', file: 'chase', draw, controls, key };
+})();
+
+/* ─────────────────────────── 틀 ─────────────────────────── */
+const GAMES = [Chase];
+let cur = 0;
+function select(i) {
+  if (GAMES[cur].leave) GAMES[cur].leave(); cur = i;
+  document.querySelectorAll('nav button').forEach((b, k) => b.classList.toggle('on', k === i));
+  const ctrl = document.getElementById('ctrl'); ctrl.innerHTML = ''; GAMES[i].controls().forEach(el => ctrl.appendChild(el));
+}
+GAMES.forEach((g, i) => { const b = document.createElement('button'); b.textContent = g.name; b.onclick = () => select(i); document.getElementById('nav').appendChild(b); });
+cv.addEventListener('pointerdown', e => GAMES[cur].down && GAMES[cur].down(e));
+cv.addEventListener('pointermove', e => GAMES[cur].move && GAMES[cur].move(e));
+document.addEventListener('keydown', e => { if (!GAMES[cur].key) return; if (e.key.startsWith('Arrow') || e.key === ' ') e.preventDefault(); GAMES[cur].key(e.key); });
+function loop(t) { ctx.setTransform(DPR, 0, 0, DPR, 0, 0); GAMES[cur].draw(t); requestAnimationFrame(loop); }
+function save() {
+  cv.toBlob(blob => { const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = GAMES[cur].file + '.png';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000); }, 'image/png');
+}
+select(0); requestAnimationFrame(loop);
+</script>
+</body>
+</html>
