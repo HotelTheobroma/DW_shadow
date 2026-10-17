@@ -24,7 +24,6 @@
   .pad { display: grid; grid-template-columns: repeat(3, 46px); gap: 4px; }
   .pad button { padding: 8px 0; }
 
-  /* ── 모바일 ── */
   html { -webkit-text-size-adjust: 100%; }
   body { min-height: 100dvh; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
   button, .tile, nav button { touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -58,7 +57,6 @@
 
 <script>
 
-/* ── 모바일: 이미지 저장 ── */
 const COARSE = matchMedia('(pointer: coarse)').matches;
 function deliver(blob, name) {
   if (!COARSE) {
@@ -79,7 +77,6 @@ function deliver(blob, name) {
   });
   document.body.appendChild(box);
 }
-/* ─────────────────────────── 공통 ─────────────────────────── */
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
 const SZ = 640, DPR = Math.min(2, window.devicePixelRatio || 1);
 cv.width = SZ * DPR; cv.height = SZ * DPR;
@@ -89,7 +86,6 @@ const bgCanvas = document.createElement('canvas'); bgCanvas.width = SZ; bgCanvas
   const g = bgCanvas.getContext('2d'); let s = 13; const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
   const bg = g.createRadialGradient(SZ / 2, SZ * .4, 30, SZ / 2, SZ * .4, SZ * .8);
   bg.addColorStop(0, '#1d1035'); bg.addColorStop(1, '#07040f'); g.fillStyle = bg; g.fillRect(0, 0, SZ, SZ);
-  // 위에서 아래로 매달린 거꾸로 된 나무 실루엣
   for (let i = 0; i < 9; i++) {
     const x = rnd() * SZ, h = 40 + rnd() * 70; g.strokeStyle = 'rgba(70,50,100,.45)'; g.lineWidth = 3;
     g.beginPath(); g.moveTo(x, 0); g.lineTo(x + (rnd() - .5) * 10, h); g.stroke();
@@ -108,7 +104,7 @@ function orb(x, y, r, inner, outer, glow) {
   const g = ctx.createRadialGradient(x - r * .3, y - r * .3, 1, x, y, r); g.addColorStop(0, inner); g.addColorStop(1, outer);
   ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fillStyle = g; ctx.shadowColor = glow; ctx.shadowBlur = 18; ctx.fill(); ctx.shadowBlur = 0;
 }
-function shade(x, y, r, t) {   // 그림자(숲의 주인 / 쫓아오는 것)
+function shade(x, y, r, t) {   
   ctx.save(); ctx.translate(x, y);
   ctx.beginPath(); for (let k = 0; k <= 20; k++) { const a = Math.PI * 2 * k / 20, w = r * (1 + .12 * Math.sin(t / 180 + k * 1.7)); ctx.lineTo(w * Math.cos(a), w * Math.sin(a) * 1.1); }
   ctx.closePath(); const g = ctx.createRadialGradient(0, 0, 2, 0, 0, r * 1.2); g.addColorStop(0, '#1a0f2a'); g.addColorStop(1, '#3a1c4a');
@@ -124,7 +120,6 @@ function rootBar(x1, y1, x2, y2, w, alpha = 1) {
 }
 function veil(win) { ctx.fillStyle = win ? 'rgba(127,214,255,.08)' : 'rgba(40,0,20,.45)'; ctx.fillRect(0, 0, SZ, SZ); }
 
-/* ─────────────────── ② 쫓아오는 그림자 ─────────────────── */
 const Chase = (() => {
   const N = 7, CELL = 68, OX = (SZ - N * CELL) / 2, OY = (SZ - N * CELL) / 2;
   const Hw = [[0,0,0,0,0,0,1],[0,0,1,1,1,0,0],[0,0,0,1,0,0,0],[1,1,1,0,1,0,0],[0,0,0,0,0,0,0],[0,0,0,0,0,1,0],[1,1,1,1,1,1,1]];
@@ -195,7 +190,6 @@ const Chase = (() => {
   return { name: '그림자', file: 'chase', draw, controls, key };
 })();
 
-/* ─────────────────────────── 틀 ─────────────────────────── */
 const GAMES = [Chase];
 let cur = 0;
 function select(i) {
@@ -208,7 +202,6 @@ cv.addEventListener('pointerdown', e => GAMES[cur].down && GAMES[cur].down(e));
 cv.addEventListener('pointermove', e => GAMES[cur].move && GAMES[cur].move(e));
 document.addEventListener('keydown', e => { if (!GAMES[cur].key) return; if (e.key.startsWith('Arrow') || e.key === ' ') e.preventDefault(); GAMES[cur].key(e.key); });
 
-/* ── 모바일: 판 위를 밀어서 움직이기 ── */
 (function () {
   let sx = null, sy = null;
   cv.addEventListener('pointerdown', e => { sx = e.clientX; sy = e.clientY; });
