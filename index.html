@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>·</title>
 <style>
   :root { --void:#07040f; --water:#7fd6ff; --glow:#b48cff; --text:#e6dcff; --muted:#8f84a8; }
@@ -14,7 +14,7 @@
   nav { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
   nav button { background: transparent; color: var(--muted); border: 1px solid #3a2a5c; border-radius: 999px; padding: 6px 14px; font-size: 13px; cursor: pointer; }
   nav button.on { color: var(--text); border-color: var(--glow); background: rgba(108,63,196,.25); box-shadow: 0 0 10px rgba(180,140,255,.3); }
-  canvas { width: min(640px, 100%); aspect-ratio: 1; display: block; border-radius: 6px; touch-action: none;
+  canvas { width: min(640px, 100%); width: min(640px, 100%, max(300px, 100dvh - 230px)); aspect-ratio: 1; display: block; border-radius: 6px; touch-action: none;
            clip-path: polygon(2% 1%,40% 0,62% 2%,98% 0,100% 35%,98% 70%,100% 99%,60% 100%,30% 98%,0 100%,1% 60%,0 25%); }
   .row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; }
   button.act { background: #1c1430; color: var(--text); border: 1px solid #4a3a72; border-radius: 8px; padding: 9px 14px; font-size: 14px; cursor: pointer; min-width: 44px; }
@@ -23,6 +23,31 @@
   button.save { background: linear-gradient(180deg,#5b3aa8,#3b2378); border-color: #8f6be0; color: #f1eaff; }
   .pad { display: grid; grid-template-columns: repeat(3, 46px); gap: 4px; }
   .pad button { padding: 8px 0; }
+
+  /* ── 모바일 ── */
+  html { -webkit-text-size-adjust: 100%; }
+  body { min-height: 100dvh; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+  button, .tile, nav button { touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  canvas { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  @media (hover: none) {
+    button.act:hover { border-color: #4a3a72; box-shadow: none; }
+    button.save:hover { border-color: #8f6be0; }
+    button:hover { box-shadow: none; }
+    button:active, button.act:active { filter: brightness(1.35); }
+  }
+  @media (max-width: 560px) {
+    body { padding: 12px 10px 28px; gap: 12px; }
+    button.act { padding: 12px 16px; font-size: 15px; min-width: 52px; min-height: 48px; }
+    .pad { grid-template-columns: repeat(3, 62px); gap: 6px; }
+    .pad button { min-height: 58px; font-size: 22px; padding: 0; }
+  }
+  #saveSheet { position: fixed; inset: 0; z-index: 99; background: rgba(4,2,10,.88); display: flex; flex-direction: column;
+               align-items: center; justify-content: center; gap: 14px; padding: 20px; }
+  #saveSheet img { max-width: min(92vw, 560px); max-height: 68dvh; border-radius: 8px; box-shadow: 0 0 24px rgba(180,140,255,.35);
+                   -webkit-touch-callout: default; -webkit-user-select: auto; user-select: auto; }
+  #saveSheet p { margin: 0; font-size: 14px; color: #cfc2ee; text-align: center; }
+  #saveSheet .btns { display: flex; gap: 8px; }
+  #saveSheet button { background: #1c1430; color: #e6dcff; border: 1px solid #4a3a72; border-radius: 8px; padding: 12px 18px; font-size: 15px; }
 </style>
 </head>
 <body>
@@ -32,6 +57,28 @@
 <div class="row"><button class="act save" onclick="save()">이미지로 저장</button></div>
 
 <script>
+
+/* ── 모바일: 이미지 저장 ── */
+const COARSE = matchMedia('(pointer: coarse)').matches;
+function deliver(blob, name) {
+  if (!COARSE) {
+    const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000); return;
+  }
+  const url = URL.createObjectURL(blob), file = new File([blob], name, { type: 'image/png' });
+  const box = document.createElement('div'); box.id = 'saveSheet';
+  const canShare = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+  box.innerHTML = '<img alt=""><p>이미지를 길게 눌러 저장하세요.</p><div class="btns">' +
+    (canShare ? '<button data-k="share">공유 · 저장</button>' : '<button data-k="dl">내려받기</button>') + '<button data-k="x">닫기</button></div>';
+  box.querySelector('img').src = url;
+  box.addEventListener('click', e => {
+    const k = e.target.dataset && e.target.dataset.k;
+    if (k === 'share') navigator.share({ files: [file] }).catch(() => {});
+    else if (k === 'dl') { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
+    else if (k === 'x' || e.target === box) { box.remove(); URL.revokeObjectURL(url); }
+  });
+  document.body.appendChild(box);
+}
 /* ─────────────────────────── 공통 ─────────────────────────── */
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
 const SZ = 640, DPR = Math.min(2, window.devicePixelRatio || 1);
@@ -160,10 +207,21 @@ GAMES.forEach((g, i) => { const b = document.createElement('button'); b.textCont
 cv.addEventListener('pointerdown', e => GAMES[cur].down && GAMES[cur].down(e));
 cv.addEventListener('pointermove', e => GAMES[cur].move && GAMES[cur].move(e));
 document.addEventListener('keydown', e => { if (!GAMES[cur].key) return; if (e.key.startsWith('Arrow') || e.key === ' ') e.preventDefault(); GAMES[cur].key(e.key); });
+
+/* ── 모바일: 판 위를 밀어서 움직이기 ── */
+(function () {
+  let sx = null, sy = null;
+  cv.addEventListener('pointerdown', e => { sx = e.clientX; sy = e.clientY; });
+  cv.addEventListener('pointerup', e => {
+    if (sx === null) return; const dx = e.clientX - sx, dy = e.clientY - sy; sx = null;
+    const G = (typeof GAMES !== 'undefined' ? GAMES : PUZZLES)[cur]; if (!G.key || Math.max(Math.abs(dx), Math.abs(dy)) < 28) return;
+    G.key(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'ArrowRight' : 'ArrowLeft') : (dy > 0 ? 'ArrowDown' : 'ArrowUp'));
+  });
+  cv.addEventListener('pointercancel', () => { sx = null; });
+})();
 function loop(t) { ctx.setTransform(DPR, 0, 0, DPR, 0, 0); GAMES[cur].draw(t); requestAnimationFrame(loop); }
 function save() {
-  cv.toBlob(blob => { const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = GAMES[cur].file + '.png';
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000); }, 'image/png');
+  cv.toBlob(blob => { deliver(blob, GAMES[cur].file + '.png'); }, 'image/png');
 }
 select(0); requestAnimationFrame(loop);
 </script>
